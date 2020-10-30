@@ -1,0 +1,549 @@
+<?php 
+
+    class Dupak extends CI_Controller {
+        
+
+        function __construct()
+        {
+            parent::__construct();
+            $this->load->model('Dupak_model','model');
+            $this->load->model('Karyawan_model','karyawan');
+            $this->load->model('Master_kegiatan_model','kegiatan');
+            $this->load->model('Master_unsur_model','unsur');
+            $this->load->model('Master_subunsur_model','subunsur');
+            
+        }
+
+        
+
+
+        function index(){
+
+            $tahun = date('Y');
+            $data['pengajuan'] = $this->model->pengajuan($_SESSION['nip'],date('Y'));
+            $this->load->library('pagination');
+            $config['base_url'] = base_url().'dupak/index/';
+            $config['total_rows'] = $this->model->total($tahun);
+            $config['per_page'] = 10;
+            $choice = $config["total_rows"] / $config["per_page"];
+            $config["num_links"] = floor($choice);
+     
+            // Membuat Style pagination untuk BootStrap v4
+             $config['first_link']       = 'First';
+            $config['last_link']        = 'Last';
+            $config['next_link']        = 'Next';
+            $config['prev_link']        = 'Prev';
+            $config['full_tag_open']    = '<div class="pagging text-center"><nav><ul class="pagination justify-content-center">';
+            $config['full_tag_close']   = '</ul></nav></div>';
+            $config['num_tag_open']     = '<li class="page-item"><span class="page-link">';
+            $config['num_tag_close']    = '</span></li>';
+            $config['cur_tag_open']     = '<li class="page-item active"><span class="page-link">';
+            $config['cur_tag_close']    = '<span class="sr-only">(current)</span></span></li>';
+            $config['next_tag_open']    = '<li class="page-item"><span class="page-link">';
+            $config['next_tagl_close']  = '<span aria-hidden="true">&raquo;</span></span></li>';
+            $config['prev_tag_open']    = '<li class="page-item"><span class="page-link">';
+            $config['prev_tagl_close']  = '</span>Next</li>';
+            $config['first_tag_open']   = '<li class="page-item"><span class="page-link">';
+            $config['first_tagl_close'] = '</span></li>';
+            $config['last_tag_open']    = '<li class="page-item"><span class="page-link">';
+            $config['last_tagl_close']  = '</span></li>';
+
+
+            $from = $this->uri->segment(4);
+            $this->pagination->initialize($config);
+            $data['pagination'] = $this->pagination->create_links();
+            $data['data'] = $this->model->data($config['per_page'],$from,$tahun);
+            $data['title'] = 'Data Dupak Tahun '.$tahun;
+
+            
+            $data['template'] = 'pages/dupak/index';
+
+            $this->load->view('dashboard',$data);
+
+        }
+
+        function add(){
+
+            // print_r($_SESSION);
+            // exit;
+
+            $data['template'] = 'pages/dupak/add';
+            $data['title'] = 'Form Tambah SPT';
+            $data["kegiatan"] = $this->kegiatan->getAllDupak();
+           // print_r($this->db->last_query())
+            $this->load->view('dashboard',$data);
+        }
+
+
+        function edit($id){
+            $data['data'] = $this->model->detail($id);
+            $data['file'] = $this->model->get_file($id);
+            $data['template'] = 'pages/dupak/edit';
+            $data['title'] = 'Form Edit SPT';
+            $data["kegiatan"] = $this->kegiatan->getAllDupak();
+           // print_r($this->db->last_query())
+            $this->load->view('dashboard',$data);
+        }
+
+        function detail($id){
+            $data['title'] = 'Detail SPT';
+
+            $data['data'] = $this->model->detail($id);
+            $data['file'] = $this->model->get_file($id);
+            $data['template'] = 'pages/dupak/detail';
+            $this->load->view('dashboard',$data);
+
+        }
+
+
+        function getsubunsur(){
+
+            $id_unsur = $this->input->post('id_unsur');
+            $subunsur = $this->subunsur->get_by_unsur($id_unsur);
+            echo "<option value=''>Pilih Sub Unsur </option>";
+            foreach($subunsur as $k => $v){
+                echo "<option value='".$v->id_subunsur."'>".$v->nama_subunsur."</option>";
+            }
+
+        }
+
+        function getkegiatan(){
+
+            $id_subunsur = $this->input->post('id_subunsur');
+            $kegiatan = $this->kegiatan->get_by_subunsur($id_subunsur);
+            // echo "<option value=''>Pilih Kegiatan </option>";
+            foreach($kegiatan as $k => $v){
+                if($v->parent_id == NULL OR $v->parent_id == 0){
+
+                    if($v->kode_kegiatan == ''){
+                    echo '<optgroup label="'.$v->nama_kegiatan.'">';
+                    $parent_id = $v->id_kegiatan;
+                    }else{
+                        echo "<option value='".$v->id_kegiatan."'>".$v->nama_kegiatan."</option>";
+
+                    }
+                }
+
+                if($v->parent_id == $parent_id){
+                    echo "<option value='".$v->id_kegiatan."'>".$v->nama_kegiatan."</option>";
+                }else{
+                    echo "</optgroup>";
+                }
+
+            }
+
+        }
+
+        function pengajuan(){
+
+            $nip =  $_SESSION['nip'];   
+            $tahun = date('Y');
+            $cek = $this->db->get_where('penilaian',array('nip' => $nip,'tahun' => $tahun))->result();
+
+            if(count($cek) == 0){
+            $dt = array(
+                'tanggal_pengajuan' => date('Y-m-d'),
+                'nip' => $nip,
+                'tahun' => $tahun,
+                'created_by' => $_SESSION['nama_lengkap'],
+                'created_date' => date('Y-m-d H:i:s'),
+                'status' => 1,
+                'golongan' => $_SESSION['golongan']
+            );
+
+            $this->db->insert('penilaian',$dt);
+
+            $dt = array(
+                'id_status' => 2
+            );
+            $this->db->update('dupak',$dt,array('nip' => $nip,'tahun' => $tahun));
+        }else{
+            $dt = array(
+                'tanggal_pengajuan' => date('Y-m-d'),
+                'nip' => $nip,
+                'tahun' => $tahun,
+                'created_by' => $_SESSION['nama_lengkap'],
+                'created_date' => date('Y-m-d H:i:s'),
+                'status' => 1
+            );
+
+            $dt2 = array(
+                'id_status' => 2
+            );
+            $this->db->update('dupak',$dt2,array('nip' => $nip,'tahun' => $tahun,'id_status' => 1));
+
+            $this->db->update('penilaian',$dt,array('nip' => $nip,'tahun' => $tahun));
+        }
+            echo json_encode(array("status" => "TRUE","message" => "Berhasil"));
+
+        }
+
+        function prosesedit(){
+          //  echo "<pre>";
+            // print_r($_POST);
+            // print_r($_FILES);
+            if($this->input->post()){
+                
+                $id_dupak       = $this->input->post('id_dupak');
+                $nip            = $_SESSION['nip'];
+                $nomor_spt      = $this->input->post('nomor_spt');
+                $tanggal        = $this->input->post('tanggal_spt');
+                $kode_kegiatan  = $this->input->post('kode_kegiatan');
+                $lokasi         = $this->input->post('lokasi');
+                $subjek_tugas   = $this->input->post('subjek');
+                $rincian        = $this->input->post('nama_kegiatan');
+                $output         = $this->input->post('satuan_hasil');
+                $angka_kredit   = $this->input->post('angka_kredit');
+                $bobot_kredit   = $this->input->post('bobot_kredit');
+                $id_status      = 1;
+                $tahun          = date('Y');
+                $tanggal_mulai  = $this->input->post('tanggal_mulai');
+                $tanggal_selesai  = $this->input->post('tanggal_selesai');
+
+                $data = array(
+                    'nip' => $nip,
+                    'nomor_spt' => $nomor_spt,
+                    'tanggal' => $tanggal,
+                    'kode_kegiatan' => $kode_kegiatan,
+                    'lokasi'    => $lokasi,
+                    'subjek_tugas' => $subjek_tugas,
+                    'rincian'   => $rincian,
+                    'output'    => $output,
+                    'id_status' => 1,
+                    'tahun' => $tahun,
+                    'tanggal_mulai' => $tanggal_mulai,
+                    'tanggal_selesai'   => $tanggal_selesai,
+
+                    'angka_kredit' => $angka_kredit,
+                    'bobot_kredit'   => $bobot_kredit
+                );
+
+    
+                if(!empty($_FILES['file_spt']['name'])){
+                    // Set preference
+                    $config['upload_path']      = './file_spt/'; 
+                    $config['allowed_types']    = '*';
+                    $config['max_size']         = '4096'; // max_size in kb
+                    $config['file_name']        = "SPT_DUPAK_".$tahun."_".$_SESSION['nip'];
+    
+                    //Load upload library
+                    $this->load->library('upload',$config); 
+                    if($this->upload->do_upload('file_spt')){
+                    $dt = $this->upload->data();
+                    $file_spt =  $dt['file_name'];  
+                    $data['file_spt'] = $file_spt;          
+                    }else{
+                    }
+                  }else{
+                 
+                  }
+
+                //   $ins 
+    
+                   $ins = $this->model->update($data,$id_dupak);
+                  if($ins){
+                    $id_dupak_file = [];
+                    if(count(@$_POST['id_dupak_file']) > 0){
+                    foreach($_POST['id_dupak_file'] as $k => $v){
+                        $id_dupak_file[$k] = $v;                        
+                    }
+                    $this->db->where_not_in('id_dupak_file', $id_dupak_file);
+                    $this->db->delete('dupak_file');     
+                }
+                    $config2['upload_path'] = './files/'; //path folder
+                    $config2['allowed_types'] = '*'; //type yang dapat diakses bisa anda sesuaikan
+                    $config2['encrypt_name'] = TRUE; //nama yang terupload nantinya
+                    $config2['file_name'] = strtotime(date('Y-m-d H:i:s')).rand(); //nama yang terupload nantinya
+                    $this->load->library('upload');
+                    $this->upload->initialize($config2);
+
+                
+                    $files = $_FILES;
+                    $cpt = count(@$_FILES['file_kegiatan']['name']);
+                    for($i=0; $i<$cpt; $i++)
+                    {           
+                        $_FILES['file_kegiatan']['name']= $files['file_kegiatan']['name'][$i];
+                        $_FILES['file_kegiatan']['type']= $files['file_kegiatan']['type'][$i];
+                        $_FILES['file_kegiatan']['tmp_name']= $files['file_kegiatan']['tmp_name'][$i];
+                        $_FILES['file_kegiatan']['error']= $files['file_kegiatan']['error'][$i];
+                        $_FILES['file_kegiatan']['size']= $files['file_kegiatan']['size'][$i];    
+                
+                        if($this->upload->do_upload('file_kegiatan')){
+                            $upl = $this->upload->data();
+                            $ins_arr = array(
+                                'id_dupak' => $id_dupak,
+                                'file_upload' => $upl['file_name'],
+                                'keterangan' => $_POST['keterangan'][$i],
+                                'created_by' => $_SESSION['nama_lengkap'],
+                                'created_date' => date('Y-m-d H:i:s')
+                            );
+                            $ins2 = $this->db->insert('dupak_file',$ins_arr);
+    
+                        }else{
+                        }
+                    }
+    
+                    $cek_pengajuan = $this->db->get_where('penilaian',array('nip' => $_SESSION['nip'],'tahun' => date('Y')))->result();
+                    if(count($cek_pengajuan) > 0){
+                        $update = $this->db->update('penilaian',array('status' => 99),array('nip' => $_SESSION['nip'],'tahun' => date('Y')));    
+                      }
+    
+                    $this->session->set_flashdata('item','<div class="alert alert-info"> Data Berhasil Diedit </div>');
+                    redirect('dupak');
+    
+    
+                  }
+
+                
+    
+    
+    
+    
+    
+    
+                    redirect('dupak/edit/'.$id_dupak);
+    
+    
+                }else{
+                    redirect('404');
+                }
+
+
+        }
+
+        function proses(){
+
+
+            if($this->input->post()){
+            $nip            = $_SESSION['nip'];
+            $nomor_spt      = $this->input->post('nomor_spt');
+            $tanggal        = $this->input->post('tanggal_spt');
+            $kode_kegiatan  = $this->input->post('kode_kegiatan');
+            $lokasi         = $this->input->post('lokasi');
+            $subjek_tugas   = $this->input->post('subjek');
+            $rincian        = $this->input->post('nama_kegiatan');
+            $output         = $this->input->post('satuan_hasil');
+            $id_status      = 1;
+            $tahun          = date('Y');
+            $tanggal_mulai  = $this->input->post('tanggal_mulai');
+            $tanggal_selesai  = $this->input->post('tanggal_selesai');
+
+            $angka_kredit   = $this->input->post('angka_kredit');
+            $bobot_kredit   = $this->input->post('bobot_kredit');
+
+            if(!empty($_FILES['file_spt']['name'])){
+                // Set preference
+                $config['upload_path']      = './file_spt/'; 
+                $config['allowed_types']    = '*';
+                $config['max_size']         = '4096'; // max_size in kb
+                $config['file_name']        = "SPT_DUPAK_".$tahun."_".$_SESSION['nip'];
+
+                //Load upload library
+                $this->load->library('upload',$config); 
+                if($this->upload->do_upload('file_spt')){
+                $dt = $this->upload->data();
+                $file_spt =  $dt['file_name'];            
+                }else{
+                    $this->session->set_flashdata('item','<div class="alert alert-danger">'.$this->upload->display_errors().'</div>');
+                    redirect('dupak/add');
+                }
+              }else{
+                $this->session->set_flashdata('item','<div class="alert alert-danger"> File SPT Harus ada </div>');
+                redirect('dupak/add');
+              }
+
+
+              $insert = array(
+                  'nip' => $nip,
+                  'nomor_spt' => $nomor_spt,
+                  'tanggal' => $tanggal,
+                  'lokasi' => $lokasi,
+                  'subjek_tugas' => $subjek_tugas,
+                  'kode_kegiatan' => $kode_kegiatan,
+                  'file_spt' => $file_spt,
+                  'rincian' => $rincian,
+                  'output' => $output,
+                  'id_status' => $id_status,
+                  'created_by' => $_SESSION['nama_lengkap'],
+                  'created_date' => date('Y-m-d H:i:s'),
+                  'tahun' => $tahun,
+                  'tanggal_mulai' => $tanggal_mulai,
+                  'tanggal_selesai' => $tanggal_selesai,
+
+                  'angka_kredit' => $angka_kredit,
+                  'bobot_kredit' => $bobot_kredit,
+              );
+
+              $ins = $this->model->insert($insert);
+              if($ins){
+              //  $this->upload->clear();
+                $id_dupak = $this->db->insert_id();
+
+                $config2['upload_path'] = './files/'; //path folder
+                $config2['allowed_types'] = '*'; //type yang dapat diakses bisa anda sesuaikan
+                $config2['encrypt_name'] = TRUE; //nama yang terupload nantinya
+                $config2['file_name'] = strtotime(date('Y-m-d H:i:s')).rand(); //nama yang terupload nantinya
+                // $this->load->library('upload',$config);
+                // echo "<pre>";
+                // print_r($_FILES);
+
+                $this->upload->initialize($config2);
+
+                $files = $_FILES;
+                $cpt = count($_FILES['file_kegiatan']['name']);
+                for($i=0; $i<$cpt; $i++)
+                {           
+                    $_FILES['file_kegiatan']['name']= $files['file_kegiatan']['name'][$i];
+                    $_FILES['file_kegiatan']['type']= $files['file_kegiatan']['type'][$i];
+                    $_FILES['file_kegiatan']['tmp_name']= $files['file_kegiatan']['tmp_name'][$i];
+                    $_FILES['file_kegiatan']['error']= $files['file_kegiatan']['error'][$i];
+                    $_FILES['file_kegiatan']['size']= $files['file_kegiatan']['size'][$i];    
+            
+                    if($this->upload->do_upload('file_kegiatan')){
+                        $upl = $this->upload->data();
+
+                        // print_r($upl);
+                        // exit;
+                        $ins_arr = array(
+                            'id_dupak' => $id_dupak,
+                            'file_upload' => $upl['file_name'],
+                            'keterangan' => $_POST['keterangan'][$i],
+                            'created_by' => $_SESSION['nama_lengkap'],
+                            'created_date' => date('Y-m-d H:i:s')
+                        );
+
+                        $ins2 = $this->db->insert('dupak_file',$ins_arr);
+
+                    }else{
+                        // print_r($this->upload->display_errors());
+                        // exit;
+                    }
+                }
+
+           
+
+                $this->session->set_flashdata('item','<div class="alert alert-info"> Data Berhasil Dimasukan </div>');
+                redirect('dupak');
+
+
+              }
+
+
+
+
+
+
+                redirect('dupak/add');
+
+
+            }else{
+                redirect('404');
+            }
+
+        }
+
+        function uploadfile($id){
+
+            $data['template'] = 'pages/dupak/uploadfile';
+            $data['data'] = $this->model->detail($id);
+            $data['files'] = $this->model->get_files($id);
+            $this->load->view('dashboard',$data);
+
+        }
+
+
+        function uploadproses(){
+
+            $id_penilaian = $this->input->post('id_penilaian');
+
+            // print_r($_POST);
+            if(!empty($_FILES['file']['name'])){
+
+                // Set preference
+                $config['upload_path'] = './files/'; 
+                $config['allowed_types']        = '*';
+                $config['max_size'] = '4096'; // max_size in kb
+                $config['file_name'] = strtotime(date('Y-m-d H:i:s'))."_File_Dupak_".$_SESSION['nip'];
+           
+                //Load upload library
+                $this->load->library('upload',$config); 
+           
+                // File upload
+                if($this->upload->do_upload('file')){
+                  // Get data about the file
+                $dt = $this->upload->data();
+
+                $ins = array(
+                    'id_penilaian' => $id_penilaian,
+                    'file_upload' => $dt['file_name'],
+                    'created_by' => $_SESSION['nama_lengkap'],
+                    'created_date' => date('Y-m-d H:i:s')
+                );
+
+                $insert = $this->db->insert('penilaian_file',$ins);
+                if($insert){
+                    
+                }
+
+
+                }else{
+                    print_r($this->upload->display_errors());
+
+                }
+              }else{
+                  echo 'empty';
+              }
+
+
+              redirect('dupak/uploadfile/'.$id_penilaian);
+
+
+
+        }
+
+        function detailkegiatan(){
+
+            $id_kegiatan = $this->input->post('id_kegiatan');
+            $kegiatan = $this->kegiatan->detail($id_kegiatan);
+            echo json_encode($kegiatan);
+
+
+        }
+
+        function hapus(){
+
+            $id_dupak = $this->input->post('id_dupak');
+            $delete = $this->db->delete('dupak_file',array('id_dupak' => $id_dupak));
+            $dupak = $this->db->delete('dupak',array('id_dupak' => $id_dupak));
+
+            echo json_encode(array("status" => TRUE));
+        }
+
+
+        function cetak($id = 0){
+            ini_set('memory_limit', '-1');
+            $this->load->library('pdf');
+            $data = [];
+
+            $tahun = date('Y');
+            $data['data'] = $this->karyawan->detail($id);
+            $data['file'] = $this->model->get_file($id);
+            $data['dupak'] = $this->model->list_dupak($id,$tahun);
+                // echo "<pre>";
+                // print_r($data);
+                // exit;
+
+                $data['utama'] = $this->model->list_dupak_type($id,$tahun,"UNSUR UTAMA");
+                $data['penunjang'] = $this->model->list_dupak_type($id,$tahun,"UNSUR PENUNJANG");
+                $data['pejabat'] = get_pejabat();
+
+
+            $this->pdf->setPaper('Legal', 'potrait');
+            $this->pdf->filename = "PAK_DUPAK_".$id.".pdf";
+            $this->pdf->load_view('cetakpak', $data);
+        }
+
+
+
+
+    }
